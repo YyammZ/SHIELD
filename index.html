@@ -34,7 +34,6 @@
       outline: none;
     }
 
-    /* 🟡 Kontainer Kamera */
     .camera-container {
       position: relative;
       width: 95vw;
@@ -71,7 +70,6 @@
       font-weight: bold;
     }
 
-    /* 🔵 Popup izin kamera */
     #cameraPermissionPopup {
       position: fixed;
       top: 0;
@@ -116,7 +114,6 @@
 
   <div id="status">🔄 Menunggu izin kamera...</div>
 
-  <!-- 🔵 Popup -->
   <div id="cameraPermissionPopup">
     <h2>📷 Izin Akses Kamera</h2>
     <p>Aplikasi ini memerlukan akses ke kamera untuk mendeteksi wajah.</p>
@@ -137,7 +134,6 @@
     let currentStream = null;
     let isPredicting = false;
 
-    // 🔹 Fungsi minta izin kamera dengan popup
     async function requestCameraPermission() {
       popup.style.display = 'flex';
       return new Promise(resolve => {
@@ -154,7 +150,6 @@
       });
     }
 
-    // 🔹 Ambil daftar kamera
     async function getCameras() {
       const granted = await requestCameraPermission();
       if (!granted) return;
@@ -175,7 +170,6 @@
       }
     }
 
-    // 🔹 Jalankan kamera
     async function startCamera(deviceId) {
       if (currentStream) currentStream.getTracks().forEach(t => t.stop());
       try {
@@ -202,10 +196,8 @@
 
     cameraSelect.addEventListener('change', () => startCamera(cameraSelect.value));
 
-    // Jalankan otomatis
     getCameras();
 
-    // 🔹 Jalankan prediksi otomatis
     async function startPrediction() {
       if (isPredicting) return;
       isPredicting = true;
@@ -232,18 +224,25 @@
 
           if (result.faces && result.faces.length > 0) {
             statusEl.innerHTML = `🟢 ${result.faces.length} wajah terdeteksi`;
+
             result.faces.forEach(face => {
               const [x1, y1, x2, y2] = face.box;
               const name = face.name;
               const conf = Math.round(face.confidence * 100);
 
-              ctx.strokeStyle = "lime";
+              ctx.strokeStyle = conf >= 80 ? "lime" : "orange";
               ctx.lineWidth = 2;
               ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
-              ctx.fillStyle = "lime";
-              ctx.font = `${Math.max(14, canvas.width / 40)}px Arial`;
-              ctx.fillText(`${name} (${conf}%)`, x1 + 5, y1 - 10);
+              if (conf >= 80) {
+                ctx.fillStyle = "lime";
+                ctx.font = `${Math.max(14, canvas.width / 40)}px Arial`;
+                ctx.fillText(`${name} (${conf}%)`, x1 + 5, y1 - 10);
+              } else {
+                ctx.fillStyle = "orange";
+                ctx.font = `${Math.max(14, canvas.width / 40)}px Arial`;
+                ctx.fillText(`Unknown ${conf}%`, x1 + 5, y1 - 10);
+              }
             });
           } else {
             statusEl.textContent = "🟡 Tidak ada wajah terdeteksi";
