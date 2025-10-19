@@ -47,17 +47,15 @@
       background-color: black;
     }
 
-    /* 🟢 Video akan memenuhi container */
     video {
       width: 100%;
       height: auto;
       display: block;
       border-radius: 12px;
       object-fit: cover;
-      transform: scaleX(-1); /* mirror view seperti kamera selfie */
+      transform: scaleX(-1);
     }
 
-    /* 🔵 Overlay canvas mengikuti video */
     canvas {
       position: absolute;
       top: 0;
@@ -72,6 +70,39 @@
       color: gold;
       font-weight: bold;
     }
+
+    /* 🔵 Popup izin kamera */
+    #cameraPermissionPopup {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      flex-direction: column;
+      text-align: center;
+    }
+    #cameraPermissionPopup h2 {
+      color: gold;
+      margin-bottom: 10px;
+    }
+    #cameraPermissionPopup button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      background: gold;
+      color: #0e0e10;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #cameraPermissionPopup button:hover {
+      background: #ffdf32;
+    }
   </style>
 </head>
 <body>
@@ -83,7 +114,14 @@
     <canvas id="overlay"></canvas>
   </div>
 
-  <div id="status">🔄 Menunggu kamera aktif...</div>
+  <div id="status">🔄 Menunggu izin kamera...</div>
+
+  <!-- 🔵 Popup -->
+  <div id="cameraPermissionPopup">
+    <h2>📷 Izin Akses Kamera</h2>
+    <p>Aplikasi ini memerlukan akses ke kamera untuk mendeteksi wajah.</p>
+    <button id="allowCameraBtn">Izinkan Kamera</button>
+  </div>
 
   <script>
     const video = document.getElementById('camera');
@@ -91,14 +129,36 @@
     const ctx = canvas.getContext('2d');
     const cameraSelect = document.getElementById('cameraSelect');
     const statusEl = document.getElementById('status');
+    const popup = document.getElementById('cameraPermissionPopup');
+    const allowBtn = document.getElementById('allowCameraBtn');
 
     const SERVER_URL = "https://be75ab76d357.ngrok-free.app/predict";
 
     let currentStream = null;
     let isPredicting = false;
 
+    // 🔹 Fungsi minta izin kamera dengan popup
+    async function requestCameraPermission() {
+      popup.style.display = 'flex';
+      return new Promise(resolve => {
+        allowBtn.onclick = async () => {
+          popup.style.display = 'none';
+          try {
+            await navigator.mediaDevices.getUserMedia({ video: true });
+            resolve(true);
+          } catch (err) {
+            statusEl.textContent = "❌ Izin kamera ditolak.";
+            resolve(false);
+          }
+        };
+      });
+    }
+
     // 🔹 Ambil daftar kamera
     async function getCameras() {
+      const granted = await requestCameraPermission();
+      if (!granted) return;
+
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cams = devices.filter(d => d.kind === 'videoinput');
@@ -134,7 +194,6 @@
       }
     }
 
-    // 🔹 Resize canvas sesuai video
     function resizeCanvas() {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -142,6 +201,8 @@
     window.addEventListener('resize', resizeCanvas);
 
     cameraSelect.addEventListener('change', () => startCamera(cameraSelect.value));
+
+    // Jalankan otomatis
     getCameras();
 
     // 🔹 Jalankan prediksi otomatis
