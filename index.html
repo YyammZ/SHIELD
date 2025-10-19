@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thermosafe Face Recognition</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #0e0e10;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      color: gold;
+      text-shadow: 0 0 10px gold;
+    }
+    select {
+      margin-top: 10px;
+      font-size: 16px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: none;
+    }
+    .camera-container {
+      position: relative;
+      display: inline-block;
+      border: 3px solid gold;
+      border-radius: 10px;
+      box-shadow: 0 0 25px gold;
+      margin-top: 15px;
+    }
+    video, canvas {
+      border-radius: 10px;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #status {
+      margin-top: 10px;
+      color: gold;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Thermosafe Face Recognition</h1>
+  <select id="cameraSelect"></select>
+  <div class="camera-container">
+    <video id="camera" width="640" height="480" autoplay></video>
+    <canvas id="overlay" width="640" height="480"></canvas>
+  </div>
+  <div id="status">🔄 Menunggu kamera aktif...</div>
+
+  <script>
+    const video = document.getElementById('camera');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const SERVER_URL = "https://be75ab76d357.ngrok-free.app/predict";
+ 
+    let currentStream;
+    let isPredicting = false;
+
+    // 🔹 Dapatkan daftar semua kamera
+    async function getCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      cameraSelect.innerHTML = "";
+      videoDevices.forEach((device, index) => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.text = device.label || `Camera ${index + 1}`;
+        cameraSelect.appendChild(option);
+      });
+      if (videoDevices.length > 0) startCamera(videoDevices[0].deviceId);
+    }
+
+    // 🔹 Jalankan kamera berdasarkan ID
+    async function startCamera(deviceId) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } }
+        });
+        currentStream = stream;
+        video.srcObject = stream;
+        statusEl.textContent = "✅ Kamera aktif — memulai prediksi...";
+        setTimeout(startAutoPrediction, 1000);
+      } catch (err) {
+        statusEl.textContent = "❌ Gagal membuka kamera: " + err.message;
+      }
+    }
+
+    cameraSelect.addEventListener('change', () => {
+      startCamera(cameraSelect.value);
+    });
+
+    getCameras();
+
+    // 🔹 Jalankan prediksi otomatis
+    async function startAutoPrediction() {
+      if (isPredicting) return;
+      isPredicting = true;
+
+      setInterval(async () => {
+        if (video.readyState < 2) return;
+
+        const frame = document.createElement('canvas');
+        frame.width = video.videoWidth;
+        frame.height = video.videoHeight;
+        frame.getContext('2d').drawImage(video, 0, 0, frame.width, frame.height);
+        const base64Image = frame.toDataURL("image/jpeg").split(",")[1];
+
+        try {
+          const response = await fetch(SERVER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: base64Image })
+          });
+
+          const result = await response.json();
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          if (result.faces && result.faces.length > 0) {
+            statusEl.textContent = `🟢 ${result.faces.length} wajah terdeteksi`;
+            result.faces.forEach(face => {
+              const [x1, y1, x2, y2] = face.box;
+              const name = face.name;
+              const conf = Math.round(face.confidence * 100);
+
+              ctx.strokeStyle = "lime";
+              ctx.lineWidth = 2;
+              ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+              ctx.fillStyle = "lime";
+              ctx.font = "16px Arial";
+              ctx.fillText(`${name} (${conf}%)`, x1 + 5, y1 - 5);
+            });
+          } else {
+            statusEl.textContent = "🟡 Tidak ada wajah terdeteksi";
+          }
+
+        } catch (err) {
+          statusEl.textContent = "⚠️ Gagal prediksi: " + err.message;
+        }
+      }, 500); // tiap 0.5 detik prediksi baru
+    }
+  </script>
+</body>
+</html>
